@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>World Cup Clock</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;600&family=Alatsi&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html {
+    height: 100%;
+    height: -webkit-fill-available;
+  }
+  html, body {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    background: #0d1117;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace;
+    overflow: hidden;
+    touch-action: none;
+    /* safe area padding for notch / home bar */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .clock-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    gap: var(--gap);
+    padding: var(--gap) var(--gap);
+    width: 100%; max-width: 100%;
+  }
+  .stadium-arc {
+    position: relative;
+    width: var(--clock-size);
+    height: var(--clock-size);
+    flex-shrink: 0;
+  }
+  canvas#clockFace {
+    position: absolute; top: 0; left: 0;
+    width: var(--clock-size); height: var(--clock-size);
+  }
+  .scoreboard {
+    width: var(--panel-w); background: #1a1a2e;
+    border-radius: var(--radius); padding: var(--pad-v) var(--pad-h);
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; gap: var(--inner-gap); border: 2px solid #c9a227;
+    flex-shrink: 0;
+  }
+  .team { display: flex; flex-direction: column; align-items: center; gap: var(--inner-gap); }
+  .team-flag {
+    width: var(--flag-w); height: var(--flag-h); border-radius: 4px;
+    overflow: hidden; border: 1px solid rgba(255,255,255,0.2);
+  }
+  .team-flag img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .team-name {
+    font-family: 'DM Mono', monospace; font-size: var(--fs-name); font-weight: 400;
+    color: #ffe066; letter-spacing: 0.15em; text-transform: uppercase;
+  }
+  .score-center { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .score-digits {
+    font-family: 'DM Mono', monospace; font-size: var(--fs-score);
+    color: #ffffff; letter-spacing: 0.2em; line-height: 1;
+  }
+  .score-label {
+    font-family: 'DM Mono', monospace; font-size: var(--fs-label);
+  }
+  .time-digital {
+    width: var(--panel-w); background: #0d1b2a;
+    border-radius: var(--radius); padding: var(--pad-v) var(--pad-h);
+    display: flex; justify-content: space-between; align-items: center;
+    border: 1px solid #2a3a4a; flex-shrink: 0;
+  }
+  .time-label {
+    font-family: 'DM Mono', monospace; font-size: var(--fs-label);
+    color: #7a8fa0; letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .time-val {
+    font-family: 'DM Mono', monospace; font-size: var(--fs-time);
+    color: #e8d5a3; letter-spacing: 0.2em;
+  }
+</style>
+</head>
+<body>
+<div class="clock-wrap" id="wrap">
+  <div class="stadium-arc">
+    <canvas id="clockFace"></canvas>
+  </div>
+  <div class="scoreboard">
+    <div class="team">
+      <div class="team-flag"><img id="flagL" src="" alt=""></div>
+      <div class="team-name" id="nameL"></div>
+    </div>
+    <div class="score-center">
+      <div class="score-digits" id="timeDisplay">--:--</div>
+
+    </div>
+    <div class="team">
+      <div class="team-flag"><img id="flagR" src="" alt=""></div>
+      <div class="team-name" id="nameR"></div>
+    </div>
+  </div>
+  <div class="time-digital" style="justify-content: center;">
+    <div class="time-val" id="dateDisplay">---  ---/--/----</div>
+  </div>
+</div>
+
+<script>
+// --- Responsive sizing ---
+// Base design: clock=340, panel=520, total height ~560
+// We compute a scale factor from viewport and set CSS vars + canvas resolution.
+
+const BASE_CLOCK = 340;
+const BASE_PANEL = 520;
+const BASE_R     = 150; // clock radius in base units
+
+function getVW() { return (window.visualViewport ? window.visualViewport.width  : window.innerWidth);  }
+function getVH() { return (window.visualViewport ? window.visualViewport.height : window.innerHeight); }
+
+function applySize() {
+  const vw = getVW();
+  const vh = getVH();
+
+  // Estimate total layout height at base size:
+  // gap*2 padding + clock(340) + gap + scoreboard(~90) + gap + datebar(~52) + gap*2 pad
+  // ≈ 340 + 90 + 52 + 5*gap; gap=24 base → ~602. Use 600.
+  const BASE_H = 600;
+
+  // Scale to fit both axes with some breathing room
+  const scaleW = vw / (BASE_PANEL + 40);
+  const scaleH = vh / (BASE_H + 20);
+  const s = Math.min(scaleW, scaleH, 2); // allow up to 2× on large screens
+
+  const clockSize  = Math.round(BASE_CLOCK * s);
+  const panelW     = Math.round(BASE_PANEL * s);
+  const gap        = Math.round(16 * s);
+  const innerGap   = Math.round(6 * s);
+  const padV       = Math.round(12 * s);
+  const padH       = Math.round(24 * s);
+  const radius     = Math.round(12 * s);
+  const flagW      = Math.round(56 * s);
+  const flagH      = Math.round(36 * s);
+  const fsScore    = Math.round(48 * s);
+  const fsName     = Math.round(24 * s);
+  const fsLabel    = Math.round(24 * s);
+  const fsTime     = Math.round(26 * s);
+
+  const root = document.documentElement;
+  root.style.setProperty('--clock-size', clockSize + 'px');
+  root.style.setProperty('--panel-w',    panelW + 'px');
+  root.style.setProperty('--gap',        gap + 'px');
+  root.style.setProperty('--inner-gap',  innerGap + 'px');
+  root.style.setProperty('--pad-v',      padV + 'px');
+  root.style.setProperty('--pad-h',      padH + 'px');
+  root.style.setProperty('--radius',     radius + 'px');
+  root.style.setProperty('--flag-w',     flagW + 'px');
+  root.style.setProperty('--flag-h',     flagH + 'px');
+  root.style.setProperty('--fs-score',   fsScore + 'px');
+  root.style.setProperty('--fs-name',    fsName + 'px');
+  root.style.setProperty('--fs-label',   fsLabel + 'px');
+  root.style.setProperty('--fs-time',    fsTime + 'px');
+
+  // Canvas: set internal resolution to match display size (sharp at any scale)
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const res = clockSize * dpr;
+  canvas.width  = res;
+  canvas.height = res;
+
+  // Store current scale for drawClock to use
+  canvas._scale = s * dpr;
+  canvas._clockSize = clockSize;
+}
+
+// 2026 FIFA World Cup 48 teams
+const TEAMS = [
+  {abbr:'MEX',code:'mx'},{abbr:'RSA',code:'za'},{abbr:'KOR',code:'kr'},{abbr:'CZE',code:'cz'},
+  {abbr:'CAN',code:'ca'},{abbr:'SUI',code:'ch'},{abbr:'QAT',code:'qa'},{abbr:'BIH',code:'ba'},
+  {abbr:'BRA',code:'br'},{abbr:'MAR',code:'ma'},{abbr:'HAI',code:'ht'},{abbr:'SCO',code:'gb-sct'},
+  {abbr:'USA',code:'us'},{abbr:'PAR',code:'py'},{abbr:'AUS',code:'au'},{abbr:'TUR',code:'tr'},
+  {abbr:'GER',code:'de'},{abbr:'CUW',code:'cw'},{abbr:'CIV',code:'ci'},{abbr:'ECU',code:'ec'},
+  {abbr:'NED',code:'nl'},{abbr:'JPN',code:'jp'},{abbr:'TUN',code:'tn'},{abbr:'SWE',code:'se'},
+  {abbr:'BEL',code:'be'},{abbr:'EGY',code:'eg'},{abbr:'IRN',code:'ir'},{abbr:'NZL',code:'nz'},
+  {abbr:'ESP',code:'es'},{abbr:'CPV',code:'cv'},{abbr:'SAU',code:'sa'},{abbr:'URU',code:'uy'},
+  {abbr:'FRA',code:'fr'},{abbr:'SEN',code:'sn'},{abbr:'NOR',code:'no'},{abbr:'IRQ',code:'iq'},
+  {abbr:'ARG',code:'ar'},{abbr:'ALG',code:'dz'},{abbr:'AUT',code:'at'},{abbr:'JOR',code:'jo'},
+  {abbr:'POR',code:'pt'},{abbr:'UZB',code:'uz'},{abbr:'COL',code:'co'},{abbr:'COD',code:'cd'},
+  {abbr:'ENG',code:'gb-eng'},{abbr:'CRO',code:'hr'},{abbr:'GHA',code:'gh'},{abbr:'PAN',code:'pa'},
+];
+
+function pickTwoTeams() {
+  const i = Math.floor(Math.random() * TEAMS.length);
+  let j;
+  do { j = Math.floor(Math.random() * TEAMS.length); } while (j === i);
+  return [TEAMS[i], TEAMS[j]];
+}
+
+function updateTeams(left, right) {
+  document.getElementById('flagL').src = `https://flagcdn.com/w80/${left.code}.png`;
+  document.getElementById('nameL').textContent = left.abbr;
+  document.getElementById('flagR').src = `https://flagcdn.com/w80/${right.code}.png`;
+  document.getElementById('nameR').textContent = right.abbr;
+}
+
+let [teamL, teamR] = pickTwoTeams();
+updateTeams(teamL, teamR);
+let lastMinute = -1;
+const canvas = document.getElementById('clockFace');
+const ctx = canvas.getContext('2d');
+
+// Base constants (design space)
+const CX = 170, CY = 170, R = 150;
+const TICK_INNER = R + 2;
+const TICK_OUTER = R + 12;
+
+function fracToAngle(frac) { return frac * Math.PI * 2; }
+
+function drawClock() {
+  const sc = canvas._scale || 1;
+  ctx.setTransform(sc, 0, 0, sc, 0, 0);
+  ctx.clearRect(0, 0, 340, 340);
+
+  const now = new Date();
+  const h24 = now.getHours();
+  const m   = now.getMinutes();
+  const s   = now.getSeconds();
+  const ms  = now.getMilliseconds();
+  const h12 = h24 % 12;
+
+  // Outer grass ring
+  ctx.beginPath(); ctx.arc(CX, CY, R+14, 0, Math.PI*2);
+  ctx.fillStyle = '#1a5c1a'; ctx.fill();
+  for (let i = 0; i < 8; i++) {
+    ctx.beginPath(); ctx.arc(CX, CY, R+14-i*3.5, 0, Math.PI*2);
+    ctx.strokeStyle = i%2===0 ? '#1f6b1f' : '#155215';
+    ctx.lineWidth = 3.2; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(CX, CY, R+14, 0, Math.PI*2);
+  ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 3; ctx.stroke();
+
+  // Field
+  ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI*2);
+  ctx.fillStyle = '#0a3d12'; ctx.fill();
+  for (let i = 0; i < 6; i++) {
+    ctx.beginPath(); ctx.arc(CX, CY, R-i*22, 0, Math.PI*2);
+    ctx.strokeStyle = i%2===0 ? '#0d4715' : '#0a3d12';
+    ctx.lineWidth = 21; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(CX, CY, 38, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(CX, CY, 4, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+
+  // Ticks — all from R+4 to R+12
+  for (let i = 0; i < 60; i++) {
+    const angle = (i/60)*Math.PI*2 - Math.PI/2;
+    const isMain = i%15===0;
+    const isHour = i%5===0;
+    ctx.beginPath();
+    ctx.moveTo(CX+Math.cos(angle)*(R+4), CY+Math.sin(angle)*(R+4));
+    ctx.lineTo(CX+Math.cos(angle)*(R+12), CY+Math.sin(angle)*(R+12));
+    ctx.strokeStyle = isMain ? '#c9a227' : isHour ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = isMain ? 3 : isHour ? 1.5 : 1; ctx.stroke();
+  }
+
+  // Numbers
+  ctx.font = '64px Alatsi, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  [12,1,2,3,4,5,6,7,8,9,10,11].forEach((n, i) => {
+    const angle = (i/12)*Math.PI*2 - Math.PI/2;
+    ctx.fillStyle = '#e8d5a3';
+    ctx.fillText(n, CX+Math.cos(angle)*(R-28), CY+Math.sin(angle)*(R-28));
+  });
+
+  // Hands
+  const secFrac = (s + ms/1000) / 60;
+  const minFrac = (m + s/60 + ms/60000) / 60;
+  const hrFrac  = (h12 + m/60 + s/3600) / 12;
+
+  // Hour
+  ctx.save(); ctx.translate(CX, CY); ctx.rotate(fracToAngle(hrFrac));
+  ctx.beginPath(); ctx.moveTo(-10,0); ctx.lineTo(0,-90); ctx.lineTo(10,0); ctx.closePath();
+  ctx.fillStyle='#c9a227'; ctx.fill(); ctx.strokeStyle='#cccccc'; ctx.lineWidth=1; ctx.stroke();
+  ctx.restore();
+
+  // Minute
+  ctx.save(); ctx.translate(CX, CY); ctx.rotate(fracToAngle(minFrac));
+  ctx.beginPath(); ctx.moveTo(-6,0); ctx.lineTo(0,-130); ctx.lineTo(6,0); ctx.closePath();
+  ctx.fillStyle='#ffffff'; ctx.fill(); ctx.strokeStyle='#a07a10'; ctx.lineWidth=1; ctx.stroke();
+  ctx.restore();
+
+  // Second — soccer ball emoji at tail
+  ctx.save(); ctx.translate(CX, CY); ctx.rotate(fracToAngle(secFrac));
+  // Rod
+  ctx.beginPath(); ctx.moveTo(0, 36); ctx.lineTo(0, -150);
+  ctx.strokeStyle='#e53935'; ctx.lineWidth=2; ctx.stroke();
+  // White circle base
+  ctx.beginPath(); ctx.arc(0, 36, 11, 0, Math.PI*2);
+  ctx.fillStyle = '#ffffff'; ctx.fill();
+  ctx.strokeStyle = '#333333'; ctx.lineWidth = 1; ctx.stroke();
+  // Draw ⚽ emoji on top
+  ctx.font = '24px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#000000';
+  ctx.fillText('\u26BD', 0, 36);
+  ctx.restore();
+
+  // Center cap
+  ctx.beginPath(); ctx.arc(CX,CY,9,0,Math.PI*2);
+  ctx.fillStyle='#c9a227'; ctx.fill(); ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2; ctx.stroke();
+
+  // Switch teams when minute changes (second hand passes 12)
+  if (m !== lastMinute) {
+    lastMinute = m;
+    [teamL, teamR] = pickTwoTeams();
+    updateTeams(teamL, teamR);
+  }
+
+  // Text displays
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('timeDisplay').textContent = pad(h24)+':'+pad(m);
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  document.getElementById('dateDisplay').textContent =
+    days[now.getDay()]+'  '+months[now.getMonth()]+'/'+pad(now.getDate())+'/'+now.getFullYear();
+}
+
+applySize();
+drawClock();
+
+const _resize = () => { applySize(); drawClock(); };
+window.addEventListener('resize', _resize);
+window.addEventListener('orientationchange', () => { setTimeout(_resize, 200); });
+if (window.visualViewport) window.visualViewport.addEventListener('resize', _resize);
+
+// Disable pinch-zoom and double-tap zoom on iOS Safari
+document.addEventListener('touchmove',  e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchstart', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturestart',  e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
+document.addEventListener('gestureend',    e => e.preventDefault(), { passive: false });
+
+document.fonts.ready.then(() => { applySize(); drawClock(); });
+setInterval(drawClock, 50);
+</script>
+</body>
+</html>
