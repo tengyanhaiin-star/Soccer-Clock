@@ -264,7 +264,7 @@ function drawClock() {
     ctx.moveTo(CX+Math.cos(angle)*(R+4), CY+Math.sin(angle)*(R+4));
     ctx.lineTo(CX+Math.cos(angle)*(R+12), CY+Math.sin(angle)*(R+12));
     ctx.strokeStyle = isMain ? '#c9a227' : isHour ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = isMain ? 3 : isHour ? 1.5 : 1; ctx.stroke();
+    ctx.lineWidth = isMain ? 3 : isHour ? 2 : 1; ctx.stroke();
   }
 
   // Numbers
