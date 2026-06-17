@@ -24,11 +24,11 @@ A real-time analog clock styled like a football pitch, featuring:
 
 ## Usage
 
-Download `soccer_clock.html` and open it in any modern browser. No server required.
+Download `index.html` and open it in any modern browser. No server required.
 
 ```
 git clone https://github.com/tengyanhaiin-star/Soccer-Clock.git
-open Soccer-Clock/soccer_clock.html
+open Soccer-Clock/index.html
 ```
 
 Or open directly on iPhone via Safari by hosting the file (e.g. GitHub Pages).
