@@ -112,7 +112,7 @@
 
 <script>
 // --- Responsive sizing ---
-// Base design: clock=340, panel=340, total height ~560
+// Base design: clock=340, panel=520, total height ~560
 // We compute a scale factor from viewport and set CSS vars + canvas resolution.
 
 const BASE_CLOCK = 340;
@@ -126,15 +126,6 @@ function applySize() {
   const vw = getVW();
   const vh = getVH();
 
-  // Fixed UI font sizes (not scaled)
-  const fsName  = 15;
-  const fsLabel = 15;
-  const fsScore = 24;
-  const fsTime  = 15;
-
-  // On first call BASE_H is unknown; use scaleW only to get s,
-  // then measure real layout height and re-run if needed.
-  // We iterate once: compute s from width, apply, measure, recompute.
   const scaleW = vw / (BASE_PANEL + 40);
 
   function applyScale(s) {
@@ -147,6 +138,10 @@ function applySize() {
     const radius    = Math.round(12 * s);
     const flagW     = Math.round(56 * s);
     const flagH     = Math.round(36 * s);
+    const fsName    = Math.max(Math.round(24 * s), 15);
+    const fsLabel   = Math.max(Math.round(24 * s), 15);
+    const fsScore   = Math.max(Math.round(40 * s), 24);
+    const fsTime    = Math.max(Math.round(24 * s), 15);
 
     const root = document.documentElement;
     root.style.setProperty('--clock-size', clockSize + 'px');
