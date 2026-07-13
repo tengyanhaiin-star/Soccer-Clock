@@ -126,61 +126,63 @@ function applySize() {
   const vw = getVW();
   const vh = getVH();
 
-  // Fixed UI font sizes (not scaled — always 24px)
+  // Fixed UI font sizes (not scaled)
   const fsName  = 24;
   const fsLabel = 24;
   const fsScore = 48;
   const fsTime  = 26;
 
-  // Estimate real layout height at s=1:
-  // padding top+bottom: 2*16=32
-  // clock: 340
-  // gap: 16
-  // scoreboard: padV*2(24) + max(flagH(36)+gap(6)+nameH(24), scoreH(48)) ≈ 24+48+24 = 96
-  // gap: 16
-  // datebar: padV*2(24) + timeH(26) = 50
-  // gap: 16 (bottom pad)
-  // total ≈ 32 + 340 + 16 + 96 + 16 + 50 = 550
-  const BASE_H = 550;
-
+  // On first call BASE_H is unknown; use scaleW only to get s,
+  // then measure real layout height and re-run if needed.
+  // We iterate once: compute s from width, apply, measure, recompute.
   const scaleW = vw / (BASE_PANEL + 40);
-  const scaleH = vh / BASE_H;
-  const s = Math.min(scaleW, scaleH, 2);
 
-  const clockSize = Math.round(BASE_CLOCK * s);
-  const panelW    = Math.round(BASE_PANEL * s);
-  const gap       = Math.round(16 * s);
-  const innerGap  = Math.round(6 * s);
-  const padV      = Math.round(12 * s);
-  const padH      = Math.round(24 * s);
-  const radius    = Math.round(12 * s);
-  const flagW     = Math.round(56 * s);
-  const flagH     = Math.round(36 * s);
+  function applyScale(s) {
+    const clockSize = Math.round(BASE_CLOCK * s);
+    const panelW    = Math.round(BASE_PANEL * s);
+    const gap       = Math.round(16 * s);
+    const innerGap  = Math.round(6 * s);
+    const padV      = Math.round(12 * s);
+    const padH      = Math.round(24 * s);
+    const radius    = Math.round(12 * s);
+    const flagW     = Math.round(56 * s);
+    const flagH     = Math.round(36 * s);
 
-  const root = document.documentElement;
-  root.style.setProperty('--clock-size', clockSize + 'px');
-  root.style.setProperty('--panel-w',    panelW + 'px');
-  root.style.setProperty('--gap',        gap + 'px');
-  root.style.setProperty('--inner-gap',  innerGap + 'px');
-  root.style.setProperty('--pad-v',      padV + 'px');
-  root.style.setProperty('--pad-h',      padH + 'px');
-  root.style.setProperty('--radius',     radius + 'px');
-  root.style.setProperty('--flag-w',     flagW + 'px');
-  root.style.setProperty('--flag-h',     flagH + 'px');
-  root.style.setProperty('--fs-score',   fsScore + 'px');
-  root.style.setProperty('--fs-name',    fsName + 'px');
-  root.style.setProperty('--fs-label',   fsLabel + 'px');
-  root.style.setProperty('--fs-time',    fsTime + 'px');
+    const root = document.documentElement;
+    root.style.setProperty('--clock-size', clockSize + 'px');
+    root.style.setProperty('--panel-w',    panelW + 'px');
+    root.style.setProperty('--gap',        gap + 'px');
+    root.style.setProperty('--inner-gap',  innerGap + 'px');
+    root.style.setProperty('--pad-v',      padV + 'px');
+    root.style.setProperty('--pad-h',      padH + 'px');
+    root.style.setProperty('--radius',     radius + 'px');
+    root.style.setProperty('--flag-w',     flagW + 'px');
+    root.style.setProperty('--flag-h',     flagH + 'px');
+    root.style.setProperty('--fs-score',   fsScore + 'px');
+    root.style.setProperty('--fs-name',    fsName + 'px');
+    root.style.setProperty('--fs-label',   fsLabel + 'px');
+    root.style.setProperty('--fs-time',    fsTime + 'px');
 
-  // Canvas: set internal resolution to match display size (sharp at any scale)
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const res = clockSize * dpr;
-  canvas.width  = res;
-  canvas.height = res;
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const res = clockSize * dpr;
+    canvas.width  = res;
+    canvas.height = res;
+    canvas._scale = s * dpr;
+  }
 
-  // Store current scale for drawClock to use
-  canvas._scale = s * dpr;
-  canvas._clockSize = clockSize;
+  // Step 1: apply using width-only scale
+  applyScale(scaleW);
+
+  // Step 2: measure actual rendered height of the wrap
+  const wrap = document.getElementById('wrap');
+  const actualH = wrap.scrollHeight;
+
+  // Step 3: if layout is taller than viewport, shrink s to fit height too
+  if (actualH > vh) {
+    const scaleH = scaleW * (vh / actualH);
+    const s = Math.min(scaleH, 2);
+    applyScale(s);
+  }
 }
 
 // 2026 FIFA World Cup 48 teams
