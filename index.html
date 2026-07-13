@@ -126,29 +126,36 @@ function applySize() {
   const vw = getVW();
   const vh = getVH();
 
-  // Estimate total layout height at base size:
-  // gap*2 padding + clock(340) + gap + scoreboard(~90) + gap + datebar(~52) + gap*2 pad
-  // ≈ 340 + 90 + 52 + 5*gap; gap=24 base → ~602. Use 600.
-  const BASE_H = 600;
+  // Fixed UI font sizes (not scaled — always 24px)
+  const fsName  = 24;
+  const fsLabel = 24;
+  const fsScore = 48;
+  const fsTime  = 26;
 
-  // Scale to fit both axes with some breathing room
+  // Estimate real layout height at s=1:
+  // padding top+bottom: 2*16=32
+  // clock: 340
+  // gap: 16
+  // scoreboard: padV*2(24) + max(flagH(36)+gap(6)+nameH(24), scoreH(48)) ≈ 24+48+24 = 96
+  // gap: 16
+  // datebar: padV*2(24) + timeH(26) = 50
+  // gap: 16 (bottom pad)
+  // total ≈ 32 + 340 + 16 + 96 + 16 + 50 = 550
+  const BASE_H = 550;
+
   const scaleW = vw / (BASE_PANEL + 40);
-  const scaleH = vh / (BASE_H + 20);
-  const s = Math.min(scaleW, scaleH, 2); // allow up to 2× on large screens
+  const scaleH = vh / BASE_H;
+  const s = Math.min(scaleW, scaleH, 2);
 
-  const clockSize  = Math.round(BASE_CLOCK * s);
-  const panelW     = Math.round(BASE_PANEL * s);
-  const gap        = Math.round(16 * s);
-  const innerGap   = Math.round(6 * s);
-  const padV       = Math.round(12 * s);
-  const padH       = Math.round(24 * s);
-  const radius     = Math.round(12 * s);
-  const flagW      = Math.round(56 * s);
-  const flagH      = Math.round(36 * s);
-  const fsScore    = Math.round(48 * s);
-  const fsName     = Math.round(24 * s);
-  const fsLabel    = Math.round(24 * s);
-  const fsTime     = Math.round(26 * s);
+  const clockSize = Math.round(BASE_CLOCK * s);
+  const panelW    = Math.round(BASE_PANEL * s);
+  const gap       = Math.round(16 * s);
+  const innerGap  = Math.round(6 * s);
+  const padV      = Math.round(12 * s);
+  const padH      = Math.round(24 * s);
+  const radius    = Math.round(12 * s);
+  const flagW     = Math.round(56 * s);
+  const flagH     = Math.round(36 * s);
 
   const root = document.documentElement;
   root.style.setProperty('--clock-size', clockSize + 'px');
